@@ -9,9 +9,42 @@ INSTALL_DIR="$HOME/.config/systemd/user"
 TARGET_SERVICE="$INSTALL_DIR/$SERVICE_NAME"
 TARGET_SCRIPT="$HOME/.local/bin/elgato-virtualcam.sh"
 
-echo "📦 Installing dependencies..."
-sudo apt update
-sudo apt install -y v4l2loopback-dkms v4l2loopback-utils ffmpeg
+echo "🔍 Checking and installing required packages..."
+
+REQUIRED_PKGS=(v4l2loopback-dkms v4l2loopback-utils ffmpeg)
+
+check_and_install_pkg() {
+  local pkg="$1"
+  dpkg -s "$pkg" &>/dev/null && {
+    echo "✅ $pkg is already installed"
+    return 0
+  }
+
+  echo "📦 Installing missing package: $pkg"
+  if ! sudo apt-get install -y "$pkg"; then
+    echo "⚠️  Warning: failed to install $pkg — continuing..."
+  fi
+
+  # Final verification
+  if ! dpkg -s "$pkg" &>/dev/null; then
+    echo "❌ $pkg is still not installed. You may need to fix this manually."
+    return 1
+  fi
+}
+
+apt_update_once=false
+for pkg in "${REQUIRED_PKGS[@]}"; do
+  if ! dpkg -s "$pkg" &>/dev/null; then
+    if [ "$apt_update_once" = false ]; then
+      echo "🔄 Running apt update..."
+      sudo apt-get update || echo "⚠️  apt update failed, continuing..."
+      apt_update_once=true
+    fi
+    check_and_install_pkg "$pkg"
+  else
+    echo "✅ $pkg already installed"
+  fi
+done
 
 echo "📁 Creating user systemd directory (if missing)..."
 mkdir -p "$INSTALL_DIR"
