@@ -9,7 +9,7 @@ INSTALL_DIR="$HOME/.config/systemd/user"
 TARGET_SERVICE="$INSTALL_DIR/$SERVICE_NAME"
 TARGET_SCRIPT="$HOME/.local/bin/elgato-virtualcam.sh"
 
-REQUIRED_PKGS=(v4l2loopback-dkms v4l2loopback-utils ffmpeg)
+REQUIRED_PKGS=(v4l2loopback-dkms v4l2loopback-utils ffmpeg python3-pyqt5)
 
 check_and_install_pkg() {
   local pkg="$1"
@@ -78,3 +78,44 @@ echo "🚀 Starting elgato-virtualcam service..."
 systemctl --user enable --now "$SERVICE_NAME"
 
 echo "✅ Virtual webcam service installed and running!"
+
+# Install tray controller
+TRAY_DIR="$SCRIPT_DIR/tray-controller"
+echo "🖱️  Setting up tray controller for GUI management..."
+
+# Make tray script executable
+chmod +x "$TRAY_DIR/virtualcam-tray.py"
+
+# Set up autostart
+AUTOSTART_DIR="$HOME/.config/autostart"
+AUTOSTART_FILE="$AUTOSTART_DIR/elgato-virtualcam-tray.desktop"
+
+mkdir -p "$AUTOSTART_DIR"
+cat > "$AUTOSTART_FILE" << EOF
+[Desktop Entry]
+Type=Application
+Exec=$TRAY_DIR/virtualcam-tray.py
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+Name=Elgato VirtualCam Tray
+Comment=Tray icon controller for VirtualCam
+Icon=camera-video
+Categories=AudioVideo;
+EOF
+
+echo "✅ Tray controller configured for autostart"
+
+# Start tray controller immediately (in background)
+if command -v python3 >/dev/null 2>&1; then
+  echo "🖱️  Starting tray controller..."
+  nohup "$TRAY_DIR/virtualcam-tray.py" > /dev/null 2>&1 &
+  echo "✅ Tray controller running - look for the camera icon in your system tray"
+else
+  echo "⚠️  Python3 not found - tray controller will start on next login"
+fi
+
+echo ""
+echo "🎉 Complete installation finished!"
+echo "📹 Virtual camera service: systemctl --user status $SERVICE_NAME"
+echo "🖱️  Tray controller: Look for camera icon in system tray, or run $TRAY_DIR/virtualcam-tray.py"
