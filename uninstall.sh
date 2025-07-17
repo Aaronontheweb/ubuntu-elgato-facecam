@@ -34,6 +34,19 @@ fi
 echo "🔄 Reloading systemd user manager..."
 systemctl --user daemon-reload
 
+# Clean up tray controller
+echo "🖱️  Cleaning up tray controller..."
+
+# Stop running tray controller
+pkill -f "virtualcam-tray.py" || true
+
+# Remove autostart entry
+AUTOSTART_FILE="$HOME/.config/autostart/elgato-virtualcam-tray.desktop"
+if [[ -f "$AUTOSTART_FILE" ]]; then
+  echo "   Removing autostart entry: $AUTOSTART_FILE"
+  rm -f "$AUTOSTART_FILE"
+fi
+
 echo "🧯 Unloading v4l2loopback (optional)..."
 if lsmod | grep -q v4l2loopback; then
   sudo modprobe -r v4l2loopback && echo "   Module unloaded."
@@ -41,4 +54,5 @@ else
   echo "   v4l2loopback not currently loaded."
 fi
 
+echo "ℹ️  Note: PyQt5 package left installed (may be used by other applications)"
 echo "✅ Uninstall complete."

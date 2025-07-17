@@ -6,10 +6,13 @@ This project provides a robust virtual webcam pipeline for the **Elgato Facecam*
 
 ## 📦 Features
 
-- Auto-detection of Elgato Facecam
-- Automatic transcoding to browser-friendly `yuv420p` format
-- Resilient `systemd` service to auto-start on login
-- Graceful handling of module reloads and stale processes
+- **🎥 Auto-detection** of Elgato Facecam
+- **🔄 Automatic transcoding** to browser-friendly `yuv420p` format
+- **🚀 Resilient systemd service** to auto-start on login
+- **🖱️ GUI tray controller** for easy on/off control
+- **🎨 Theme-aware tray icons** (automatically adapts to light/dark mode)
+- **📱 Desktop notifications** when service starts/stops
+- **🔧 Graceful handling** of module reloads and stale processes
 
 ---
 
@@ -18,8 +21,8 @@ This project provides a robust virtual webcam pipeline for the **Elgato Facecam*
 ### 1. Clone this repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/elgato-virtualcam.git
-cd elgato-virtualcam
+git clone https://github.com/Aaronontheweb/ubuntu-elgato-facecam.git
+cd ubuntu-elgato-facecam
 ```
 
 ### 2. Run the installer
@@ -30,12 +33,52 @@ chmod +x install.sh
 ```
 
 The script will:
-- Check for required dependencies (`v4l2loopback-dkms`, `ffmpeg`, etc)
+- Check for required dependencies (`v4l2loopback-dkms`, `ffmpeg`, `python3-pyqt5`, etc)
 - Auto-install anything missing
 - Copy the runtime script and systemd unit into the appropriate locations
-- Start the virtual webcam service
+- **Set up GUI tray controller with autostart**
+- Start both the virtual webcam service and tray controller
+
+**What you get immediately:**
+- 🎥 Virtual webcam available in `/dev/video10`
+- 🖱️ System tray icon for easy control (look for camera icon)
+- 🚀 Both components auto-start on login
 
 > If the Elgato Facecam is not plugged in at install time, the service will fall back to runtime detection.
+
+---
+
+## 🖱️ Using the Tray Controller
+
+After installation, you'll see a **camera icon** in your system tray that provides easy control:
+
+### 📱 Quick Actions
+- **Left-click**: Toggle virtual camera on/off
+- **Right-click**: Open context menu with options:
+  - Start/Stop VirtualCam
+  - Refresh Status  
+  - View Logs
+  - Quit
+
+### 🎨 Status Indicators
+- **🟢 Green icon**: VirtualCam is running
+- **⚫ Black/White icon**: VirtualCam is stopped (theme-dependent)
+- **🟡 Yellow icon**: VirtualCam status unclear
+- **🔴 Red icon**: VirtualCam service unavailable
+
+### 🔧 Manual Control (Alternative)
+If you prefer command line:
+
+```bash
+# Start virtual camera
+systemctl --user start elgato-virtualcam.service
+
+# Stop virtual camera  
+systemctl --user stop elgato-virtualcam.service
+
+# Check status
+systemctl --user status elgato-virtualcam.service
+```
 
 ---
 
@@ -108,6 +151,17 @@ Lower the resolution or framerate in `elgato-virtualcam.sh`:
 -video_size 960x540 -framerate 30
 ```
 
+### 🖱️ Tray icon not visible?
+
+**Desktop environment compatibility:**
+- Ensure your desktop environment supports system tray icons
+- GNOME users may need to install the "AppIndicator" extension
+- Try running the tray controller manually: `./tray-controller/virtualcam-tray.py`
+
+**Dependencies:**
+- Verify PyQt5 is installed: `dpkg -s python3-pyqt5`
+- Check for errors: `python3 ./tray-controller/virtualcam-tray.py`
+
 ---
 
 ## 🧼 Uninstallation
@@ -116,10 +170,14 @@ Lower the resolution or framerate in `elgato-virtualcam.sh`:
 ./uninstall.sh
 ```
 
-Removes:
-- The systemd unit
-- The background script
-- Stops and disables the virtual cam service
+**Complete cleanup removes:**
+- 🛑 The systemd service (stops and disables)
+- 📄 The background script
+- 🖱️ Tray controller (stops process and removes autostart)
+- 🔧 v4l2loopback kernel module (optional)
+
+**What stays:**
+- ✅ PyQt5 package (other applications might need it)
 
 You can manually remove the module with:
 
