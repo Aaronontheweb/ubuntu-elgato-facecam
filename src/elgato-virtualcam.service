@@ -1,0 +1,15 @@
+[Unit]
+Description=Elgato Facecam to VirtualCam (v4l2loopback via FFmpeg)
+After=default.target
+
+[Service]
+ExecStart=/home/YOUR_USERNAME/.local/bin/elgato-virtualcam.sh
+Restart=always
+RestartSec=10
+StandardOutput=append:/tmp/elgato-virtualcam.log
+StandardError=append:/tmp/elgato-virtualcam.err.log
+Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+
+[Install]
+WantedBy=default.target
