@@ -24,7 +24,12 @@ class VirtualCamTray:
         
         # Create system tray
         self.tray = QSystemTrayIcon()
-        self.create_menu()
+        
+        # Set up left-click action for toggle (do this once)
+        self.tray.activated.connect(self.on_tray_activated)
+        
+        # Create menu once and store action references
+        self.create_menu_once()
         
         # Timer for periodic status updates
         self.timer = QTimer()
@@ -34,6 +39,38 @@ class VirtualCamTray:
         # Initial status check
         self.refresh_status()
         self.tray.show()
+    
+    def create_menu_once(self):
+        """Create the context menu once and store action references"""
+        print("DEBUG: create_menu_once() called")
+        self.menu = QMenu()
+        
+        # Main toggle action - store reference
+        self.toggle_action = QAction("▶️ Start VirtualCam", self.menu)
+        self.toggle_action.triggered.connect(self.toggle_service)
+        self.menu.addAction(self.toggle_action)
+        
+        self.menu.addSeparator()
+        
+        # Refresh action
+        refresh_action = QAction("🔄 Refresh Status", self.menu)
+        refresh_action.triggered.connect(self.refresh_status)
+        self.menu.addAction(refresh_action)
+        
+        # View logs action
+        logs_action = QAction("📜 View Logs", self.menu)
+        logs_action.triggered.connect(self.view_logs)
+        self.menu.addAction(logs_action)
+        
+        self.menu.addSeparator()
+        
+        # Quit action
+        quit_action = QAction("🚪 Quit", self.menu)
+        quit_action.triggered.connect(self.quit_app)
+        self.menu.addAction(quit_action)
+        
+        # Set the menu on the tray icon
+        self.tray.setContextMenu(self.menu)
     
     def get_icon_path(self, status):
         """Get the appropriate icon path based on status and theme"""
@@ -72,6 +109,7 @@ class VirtualCamTray:
     
     def start_service(self):
         """Start the elgato-virtualcam.service"""
+        print("DEBUG: start_service() called")
         try:
             result = subprocess.run(
                 ['systemctl', '--user', 'start', 'elgato-virtualcam.service'],
@@ -92,6 +130,7 @@ class VirtualCamTray:
     
     def stop_service(self):
         """Stop the elgato-virtualcam.service"""
+        print("DEBUG: stop_service() called")
         try:
             result = subprocess.run(
                 ['systemctl', '--user', 'stop', 'elgato-virtualcam.service'],
@@ -112,6 +151,7 @@ class VirtualCamTray:
     
     def toggle_service(self):
         """Toggle the service on/off based on current status"""
+        print("DEBUG: toggle_service() called")
         status = self.get_service_status()
         if status == 'on':
             self.stop_service()
@@ -120,6 +160,7 @@ class VirtualCamTray:
     
     def refresh_status(self):
         """Update the tray icon and tooltip based on current service status"""
+        print("DEBUG: refresh_status() called")
         status = self.get_service_status()
         
         # Update icon
@@ -144,45 +185,19 @@ class VirtualCamTray:
         # Clear and recreate menu
         self.create_menu(status)
     
-    def create_menu(self, status=None):
+    def create_menu(self, status):
         """Create the context menu"""
-        if status is None:
-            status = self.get_service_status()
-        
-        menu = QMenu()
-        
-        # Main toggle action
         if status == 'on':
-            toggle_action = QAction("❌ Stop VirtualCam", menu)
-            toggle_action.triggered.connect(self.stop_service)
+            self.toggle_action.setText("❌ Stop VirtualCam")
+            self.toggle_action.triggered.disconnect() # Disconnect old connection
+            self.toggle_action.triggered.connect(self.stop_service)
         else:
-            toggle_action = QAction("▶️ Start VirtualCam", menu)
-            toggle_action.triggered.connect(self.start_service)
-        menu.addAction(toggle_action)
+            self.toggle_action.setText("▶️ Start VirtualCam")
+            self.toggle_action.triggered.disconnect() # Disconnect old connection
+            self.toggle_action.triggered.connect(self.start_service)
         
-        menu.addSeparator()
-        
-        # Refresh action
-        refresh_action = QAction("🔄 Refresh Status", menu)
-        refresh_action.triggered.connect(self.refresh_status)
-        menu.addAction(refresh_action)
-        
-        # View logs action (optional)
-        logs_action = QAction("📜 View Logs", menu)
-        logs_action.triggered.connect(self.view_logs)
-        menu.addAction(logs_action)
-        
-        menu.addSeparator()
-        
-        # Quit action
-        quit_action = QAction("🚪 Quit", menu)
-        quit_action.triggered.connect(self.quit_app)
-        menu.addAction(quit_action)
-        
-        self.tray.setContextMenu(menu)
-        
-        # Set up left-click action for toggle
-        self.tray.activated.connect(self.on_tray_activated)
+        # The menu is already set in create_menu_once, so no need to re-set it here
+        # self.tray.setContextMenu(self.menu)
     
     def on_tray_activated(self, reason):
         """Handle tray icon clicks"""
@@ -191,6 +206,7 @@ class VirtualCamTray:
     
     def view_logs(self):
         """Show recent service logs"""
+        print("DEBUG: view_logs() called")
         try:
             result = subprocess.run(
                 ['journalctl', '--user', '-u', 'elgato-virtualcam.service', '--no-pager', '-n', '20'],
@@ -218,6 +234,7 @@ class VirtualCamTray:
     
     def quit_app(self):
         """Quit the application"""
+        print("DEBUG: quit_app() called")
         self.timer.stop()
         self.app.quit()
     
