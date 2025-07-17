@@ -9,8 +9,6 @@ INSTALL_DIR="$HOME/.config/systemd/user"
 TARGET_SERVICE="$INSTALL_DIR/$SERVICE_NAME"
 TARGET_SCRIPT="$HOME/.local/bin/elgato-virtualcam.sh"
 
-echo "🔍 Checking and installing required packages..."
-
 REQUIRED_PKGS=(v4l2loopback-dkms v4l2loopback-utils ffmpeg)
 
 check_and_install_pkg() {
@@ -25,7 +23,6 @@ check_and_install_pkg() {
     echo "⚠️  Warning: failed to install $pkg — continuing..."
   fi
 
-  # Final verification
   if ! dpkg -s "$pkg" &>/dev/null; then
     echo "❌ $pkg is still not installed. You may need to fix this manually."
     return 1
@@ -46,39 +43,38 @@ for pkg in "${REQUIRED_PKGS[@]}"; do
   fi
 done
 
-echo "📁 Creating user systemd directory (if missing)..."
+echo "📁 Creating systemd user directory and local bin..."
 mkdir -p "$INSTALL_DIR"
 mkdir -p "$(dirname "$TARGET_SCRIPT")"
 
-echo "📄 Copying service and script..."
+echo "📄 Installing script and systemd unit..."
 cp "$SRC_DIR/elgato-virtualcam.sh" "$TARGET_SCRIPT"
 chmod +x "$TARGET_SCRIPT"
 
-# Detect Elgato device path at install time
+# Detect Elgato device (optional at install time)
 ELGATO_DEV=$(v4l2-ctl --list-devices 2>/dev/null | awk '/Elgato Facecam/{getline; print $1}' | head -n 1)
 
 if [[ -z "$ELGATO_DEV" ]]; then
-  echo "⚠️  Warning: Could not detect Elgato Facecam now. Will fall back to autodetect at runtime."
+  echo "⚠️  Elgato Facecam not detected now; service will auto-detect at runtime."
   SERVICE_EXEC="$TARGET_SCRIPT"
 else
   echo "📸 Detected Elgato Facecam at $ELGATO_DEV"
   SERVICE_EXEC="$TARGET_SCRIPT $ELGATO_DEV"
 fi
 
-# Inject ExecStart line with optional device path
 sed "s|ExecStart=.*|ExecStart=$SERVICE_EXEC|" "$SRC_DIR/$SERVICE_NAME" > "$TARGET_SERVICE"
 
-echo "🔄 Reloading systemd user services..."
 systemctl --user daemon-reexec
 systemctl --user daemon-reload
 
-# Ensure lingering is enabled (so user services can run at boot)
 if ! loginctl show-user "$USER" | grep -q "Linger=yes"; then
-  echo "🔐 Enabling systemd user lingering..."
+  echo "🔐 Enabling lingering for systemd user services..."
   sudo loginctl enable-linger "$USER"
 fi
 
-echo "🚀 Enabling and starting elgato-virtualcam service..."
+pkill -f "ffmpeg.*video10" || true
+
+echo "🚀 Starting elgato-virtualcam service..."
 systemctl --user enable --now "$SERVICE_NAME"
 
-echo "✅ Install complete! The virtual webcam should now be available at /dev/video10."
+echo "✅ Virtual webcam service installed and running!"
