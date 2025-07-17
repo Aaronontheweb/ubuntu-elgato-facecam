@@ -1,5 +1,7 @@
 # Elgato VirtualCam for Linux
 
+## Doesn't work - having permissions issues with `systemd`
+
 This project provides a robust virtual webcam pipeline for the **Elgato Facecam** on Ubuntu Linux using `ffmpeg`, `v4l2loopback`, and `systemd`. It creates a virtual webcam device (e.g. `/dev/video10`) that can be used by Chrome, OBS, Zoom, and other video apps — even if the Elgato device itself is unsupported or unstable.
 
 ---
