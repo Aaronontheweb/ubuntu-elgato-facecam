@@ -9,7 +9,7 @@ INSTALL_DIR="$HOME/.config/systemd/user"
 TARGET_SERVICE="$INSTALL_DIR/$SERVICE_NAME"
 TARGET_SCRIPT="$HOME/.local/bin/elgato-virtualcam.sh"
 
-REQUIRED_PKGS=(v4l2loopback-dkms v4l2loopback-utils ffmpeg python3-pyqt5)
+REQUIRED_PKGS=(v4l2loopback-dkms v4l2loopback-utils ffmpeg python3-pyqt5 python3-pip)
 
 check_and_install_pkg() {
   local pkg="$1"
@@ -79,6 +79,21 @@ systemctl --user enable --now "$SERVICE_NAME"
 
 echo "✅ Virtual webcam service installed and running!"
 
+# Install Python dependencies for tray controller
+echo "🐍 Installing Python dependencies for tray controller..."
+TRAY_DIR="$SCRIPT_DIR/tray-controller"
+if [ -f "$TRAY_DIR/requirements.txt" ]; then
+    if command -v pip3 >/dev/null 2>&1; then
+        echo "📦 Installing Python packages from requirements.txt..."
+        pip3 install -r "$TRAY_DIR/requirements.txt" --user
+        echo "✅ Python dependencies installed"
+    else
+        echo "⚠️  pip3 not found - Python dependencies may not be available"
+    fi
+else
+    echo "⚠️  requirements.txt not found in $TRAY_DIR"
+fi
+
 # Install tray controller
 TRAY_DIR="$SCRIPT_DIR/tray-controller"
 echo "🖱️  Setting up tray controller for GUI management..."
@@ -109,8 +124,14 @@ echo "✅ Tray controller configured for autostart"
 # Start tray controller immediately (in background)
 if command -v python3 >/dev/null 2>&1; then
   echo "🖱️  Starting tray controller..."
-  nohup "$TRAY_DIR/virtualcam-tray.py" > /dev/null 2>&1 &
-  echo "✅ Tray controller running - look for the camera icon in your system tray"
+  # Test if PyQt5 is available
+  if python3 -c "import PyQt5" 2>/dev/null; then
+    nohup "$TRAY_DIR/virtualcam-tray.py" > /dev/null 2>&1 &
+    echo "✅ Tray controller running - look for the camera icon in your system tray"
+  else
+    echo "⚠️  PyQt5 not available - tray controller will start on next login"
+    echo "   You may need to run: pip3 install PyQt5 --user"
+  fi
 else
   echo "⚠️  Python3 not found - tray controller will start on next login"
 fi
