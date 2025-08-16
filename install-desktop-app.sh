@@ -57,25 +57,15 @@ else
     echo "⚠️  Camera not detected - make sure Elgato Facecam is connected"
 fi
 
-# Launch the application in background
+# Start the application
 echo "🚀 Starting VirtualCam application..."
-
-# Use newgrp to refresh group membership and start the app
-echo "🔄 Refreshing group membership and starting application..."
-newgrp video -c 'python3 virtualcam_app.py &> /dev/null &'
-
-# Give it a moment to start
-sleep 2
-
-# Check if it's running
-if pgrep -f "python3 virtualcam_app.py" > /dev/null; then
-    echo "✅ VirtualCam started successfully in background"
-    echo "📱 Look for the camera icon in your system tray"
-else
-    echo "⚠️  Failed to start application automatically"
-    echo "💡 You can start it manually with: python3 virtualcam_app.py"
-    echo "📝 Or with fresh group membership: newgrp video -c 'python3 virtualcam_app.py &'"
-fi
+echo "ℹ️  Note: Group membership changes require a fresh shell session"
+echo ""
+echo "💡 Please run these commands to start the app:"
+echo "   exec bash"
+echo "   python3 virtualcam_app.py &"
+echo ""
+echo "📱 The camera icon will appear in your system tray when running"
 
 echo ""
 echo "✅ Installation complete!"
