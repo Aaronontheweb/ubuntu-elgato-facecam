@@ -232,15 +232,16 @@ class CameraManager:
         ]
         
         try:
-            # Start ffmpeg process
+            # Start ffmpeg process (match original bash script approach)
             log_file = self.config.get('logging.file', '/tmp/elgato-virtualcam.log')
-            with open(log_file.replace('.log', '.err.log'), 'a') as stderr_file:
-                self.ffmpeg_process = subprocess.Popen(
-                    cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=stderr_file,
-                    preexec_fn=os.setsid  # Create new process group
-                )
+            stderr_file = open(log_file.replace('.log', '.err.log'), 'a')
+            
+            self.ffmpeg_process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=stderr_file,
+                preexec_fn=os.setsid  # Create new process group
+            )
             
             # Give it a moment to start
             time.sleep(1)
