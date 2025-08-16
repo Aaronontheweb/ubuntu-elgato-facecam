@@ -1,8 +1,8 @@
 # Elgato VirtualCam for Linux
 
-## Doesn't work - having permissions issues with `systemd`
+A professional desktop application for using the **Elgato Facecam** as a virtual webcam on Ubuntu Linux. This unified application creates a virtual webcam device (e.g. `/dev/video10`) that works seamlessly with Chrome, OBS, Zoom, and other video applications.
 
-This project provides a robust virtual webcam pipeline for the **Elgato Facecam** on Ubuntu Linux using `ffmpeg`, `v4l2loopback`, and `systemd`. It creates a virtual webcam device (e.g. `/dev/video10`) that can be used by Chrome, OBS, Zoom, and other video apps — even if the Elgato device itself is unsupported or unstable.
+**✅ NEW: Desktop Application Architecture** - Replaces the problematic systemd approach with a reliable, single-process desktop application.
 
 ---
 
@@ -10,182 +10,205 @@ This project provides a robust virtual webcam pipeline for the **Elgato Facecam*
 
 - **🎥 Auto-detection** of Elgato Facecam
 - **🔄 Automatic transcoding** to browser-friendly `yuv420p` format
-- **🚀 Resilient systemd service** to auto-start on login
-- **🖱️ GUI tray controller** for easy on/off control
-- **🎨 Theme-aware tray icons** (automatically adapts to light/dark mode)
-- **📱 Desktop notifications** when service starts/stops
-- **🔧 Graceful handling** of module reloads and stale processes
+- **🖥️ Single desktop application** - No systemd permission issues
+- **🖱️ Integrated system tray** with real-time status indicators
+- **🎨 Dynamic status icons** (green=streaming, gray=ready, red=error)
+- **📱 Desktop notifications** when streaming starts/stops
+- **⚙️ JSON configuration** with GUI settings (coming soon)
+- **🏗️ Professional packaging** ready for PyPI distribution
 
 ---
 
 ## 🚀 Installation
 
-### 1. Clone this repository
+### Quick Start (New Desktop App)
 
 ```bash
 git clone https://github.com/Aaronontheweb/ubuntu-elgato-facecam.git
 cd ubuntu-elgato-facecam
-```
-
-### 2. Run the installer
-
-```bash
-chmod +x install.sh
-./install.sh
+git checkout refactor-to-desktop-app  # Use new architecture
+./install-desktop-app.sh
 ```
 
 The script will:
-- Check for required dependencies (`v4l2loopback-dkms`, `ffmpeg`, `python3-pyqt5`, etc)
-- Auto-install anything missing
-- Copy the runtime script and systemd unit into the appropriate locations
-- **Set up GUI tray controller with autostart**
-- Start both the virtual webcam service and tray controller
+- Install system dependencies (`v4l2loopback-dkms`, `ffmpeg`, `python3-pyqt5`)
+- Set up Python dependencies
+- Configure desktop autostart integration
+- Test camera detection
 
-**What you get immediately:**
-- 🎥 Virtual webcam available in `/dev/video10`
-- 🖱️ System tray icon for easy control (look for camera icon)
-- 🚀 Both components auto-start on login
+**What you get:**
+- 🎥 Virtual webcam available at `/dev/video10`
+- 🖱️ System tray camera icon for easy control
+- 🚀 Auto-starts on login via desktop integration
+- ⚙️ Professional configuration management
 
-> If the Elgato Facecam is not plugged in at install time, the service will fall back to runtime detection.
+### Legacy Installation (Systemd - Has Permission Issues)
+
+⚠️ **Not recommended** - Use for reference only:
+
+```bash
+git checkout master  # Original systemd approach
+./install.sh        # Has known permission issues
+```
 
 ---
 
-## 🖱️ Using the Tray Controller
+## 🖱️ Using the Desktop Application
 
 After installation, you'll see a **camera icon** in your system tray that provides easy control:
 
 ### 📱 Quick Actions
-- **Left-click**: Toggle virtual camera on/off
+- **Left-click**: Toggle streaming on/off
 - **Right-click**: Open context menu with options:
   - Start/Stop VirtualCam
-  - Refresh Status  
-  - View Logs
+  - Settings (coming soon)
+  - Status & Logs
+  - Refresh
   - Quit
 
 ### 🎨 Status Indicators
-- **🟢 Green icon**: VirtualCam is running
-- **⚫ Black/White icon**: VirtualCam is stopped (theme-dependent)
-- **🟡 Yellow icon**: VirtualCam status unclear
-- **🔴 Red icon**: VirtualCam service unavailable
+- **🟢 Green icon**: VirtualCam is streaming
+- **⚫ Gray icon**: VirtualCam is ready (camera detected)
+- **🔴 Red icon**: Camera not detected or error
+- **🟡 Amber icon**: Starting up
 
-### 🔧 Manual Control (Alternative)
-If you prefer command line:
+### 🔧 Command Line Interface
 
 ```bash
-# Start virtual camera
-systemctl --user start elgato-virtualcam.service
+# Run the application
+python3 virtualcam_app.py
 
-# Stop virtual camera  
-systemctl --user stop elgato-virtualcam.service
+# Test camera detection
+python3 virtualcam_app.py --test-camera
 
-# Check status
-systemctl --user status elgato-virtualcam.service
+# Install autostart
+python3 virtualcam_app.py --install-autostart
+
+# Debug mode
+python3 virtualcam_app.py --debug
 ```
 
 ---
 
-## 🧪 How to Test
+## 🧪 Testing & Verification
 
-### ✅ Check the virtual device
+### ✅ Comprehensive Test Suite
 
 ```bash
+# Run all tests
+./test-desktop-app.sh
+```
+
+This tests:
+- System dependencies
+- Camera detection
+- Virtual device creation
+- Application startup
+- Configuration management
+
+### ✅ Manual Testing
+
+```bash
+# Check virtual device exists
 v4l2-ctl --list-devices
-```
 
-You should see an entry like:
-
-```
-VirtualCam: VirtualCam (platform:v4l2loopback-000)
-    /dev/video10
-```
-
-### ✅ View with `cheese`
-
-```bash
+# Test with cheese
 cheese -d /dev/video10
+
+# Test camera detection only
+python3 virtualcam_app.py --test-camera
 ```
 
-Or select it via the **menu > preferences > camera** dropdown in Cheese.
+### ✅ Browser Testing
 
-### ✅ Test in browser
-
-Open:
+Open these in your browser and select **"VirtualCam"**:
 - [https://webcamtests.com](https://webcamtests.com)
-- Google Meet or Zoom settings
-
-Then select **"VirtualCam"** as your webcam device.
+- Google Meet camera settings
+- Zoom camera settings
 
 ---
 
 ## 🔧 Troubleshooting
 
-### 🧱 "modprobe: Module v4l2loopback is in use"
-
-The service may still be running. Run:
+### 🎥 Camera Not Detected
 
 ```bash
-systemctl --user stop elgato-virtualcam.service
+# Check if Elgato is connected
+lsusb | grep -i elgato
+
+# Test detection manually
+python3 virtualcam_app.py --test-camera
+
+# Check video devices
+v4l2-ctl --list-devices
+```
+
+### 🔧 Virtual Device Issues
+
+```bash
+# Remove old module and restart
 sudo modprobe -r v4l2loopback
+python3 virtualcam_app.py  # Will reload module automatically
 ```
 
-Then restart:
+### 📱 System Tray Not Visible
+
+**GNOME users:**
+```bash
+# Install AppIndicator extension
+sudo apt install gnome-shell-extension-appindicator
+```
+
+**General:**
+- Verify PyQt5: `python3 -c "import PyQt5; print('OK')"`
+- Run directly: `python3 virtualcam_app.py --debug`
+
+### 📋 View Application Logs
 
 ```bash
-sudo modprobe v4l2loopback video_nr=10 card_label="VirtualCam" exclusive_caps=1
-systemctl --user start elgato-virtualcam.service
+# Application logs
+tail -f ~/.config/elgato-virtualcam/virtualcam.log
+
+# FFmpeg error logs  
+tail -f ~/.config/elgato-virtualcam/virtualcam.err.log
 ```
 
-### 📉 FFmpeg crashes or fails to open device
-
-Check logs:
+### 🔄 Reset Configuration
 
 ```bash
-tail -n 50 /tmp/elgato-virtualcam.err.log
+# Remove config to reset to defaults
+rm -rf ~/.config/elgato-virtualcam/config.json
 ```
-
-Look for errors like `Device busy`, `Unable to open`, or `Broken pipe`.
-
-### 🧵 Too many frame drops?
-
-Lower the resolution or framerate in `elgato-virtualcam.sh`:
-
-```bash
--video_size 960x540 -framerate 30
-```
-
-### 🖱️ Tray icon not visible?
-
-**Desktop environment compatibility:**
-- Ensure your desktop environment supports system tray icons
-- GNOME users may need to install the "AppIndicator" extension
-- Try running the tray controller manually: `./tray-controller/virtualcam-tray.py`
-
-**Dependencies:**
-- Verify PyQt5 is installed: `dpkg -s python3-pyqt5`
-- Check for errors: `python3 ./tray-controller/virtualcam-tray.py`
 
 ---
 
 ## 🧼 Uninstallation
 
+### Desktop App Removal
+
 ```bash
+# Stop application
+pkill -f virtualcam_app.py
+
+# Remove autostart
+rm ~/.config/autostart/elgato-virtualcam.desktop
+
+# Remove configuration
+rm -rf ~/.config/elgato-virtualcam/
+
+# Remove virtual device module
+sudo modprobe -r v4l2loopback
+```
+
+### Legacy Systemd Removal
+
+```bash
+# For old systemd installation
 ./uninstall.sh
 ```
 
-**Complete cleanup removes:**
-- 🛑 The systemd service (stops and disables)
-- 📄 The background script
-- 🖱️ Tray controller (stops process and removes autostart)
-- 🔧 v4l2loopback kernel module (optional)
-
-**What stays:**
-- ✅ PyQt5 package (other applications might need it)
-
-You can manually remove the module with:
-
-```bash
-sudo modprobe -r v4l2loopback
-```
+**System packages remain** (safe to keep):
+- `v4l2loopback-dkms`, `ffmpeg`, `python3-pyqt5`
 
 ---
 

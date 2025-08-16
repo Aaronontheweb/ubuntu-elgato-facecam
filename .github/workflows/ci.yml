@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.8, 3.9, "3.10", "3.11", "3.12"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-pyqt5 xvfb
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest ruff mypy
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Lint with ruff
+      run: |
+        # Stop the build if there are Python syntax errors or undefined names
+        ruff check virtualcam_app.py --select=E9,F63,F7,F82
+        # Check for other issues (non-blocking for now)
+        ruff check virtualcam_app.py --exit-zero
+
+    - name: Type check with mypy (optional)
+      run: |
+        mypy virtualcam_app.py --ignore-missing-imports || true
+
+    - name: Test with unittest (no GUI)
+      run: |
+        # Run basic tests without GUI components
+        python -m unittest test_basic.py -v
+
+    - name: Test import and help (with virtual display)
+      run: |
+        # Test that the application can import and show help without crashing
+        xvfb-run -a python3 virtualcam_app.py --help
+        
+    - name: Test command-line functions
+      run: |
+        # Test CLI functions that don't require hardware
+        python3 virtualcam_app.py --install-autostart || true  # May fail without proper home setup
+        python3 virtualcam_app.py --test-camera || true       # Expected to fail without camera
+
+  package-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+        
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-pyqt5
+        
+    - name: Test package build
+      run: |
+        python -m pip install --upgrade pip build
+        python -m build
+        
+    - name: Test package installation
+      run: |
+        pip install dist/*.whl
+        # Test that the entry point works
+        which elgato-virtualcam || echo "Entry point not found (expected in some setups)"
