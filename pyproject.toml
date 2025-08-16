@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "elgato-virtualcam"
+version = "2.0.0"
+description = "Elgato Facecam Virtual Camera Desktop Application for Linux"
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [
+    {name = "Stannard Labs"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Desktop Environment",
+]
+dependencies = [
+    "PyQt5>=5.15.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/stannardlabs/ubuntu-elgato-facecam"
+"Bug Reports" = "https://github.com/stannardlabs/ubuntu-elgato-facecam/issues"
+"Source" = "https://github.com/stannardlabs/ubuntu-elgato-facecam"
+
+[project.scripts]
+elgato-virtualcam = "virtualcam_app:main"
+
+[tool.setuptools]
+py-modules = ["virtualcam_app"]
