@@ -187,6 +187,41 @@ class CameraManager:
             logging.error(f"Virtual device {virtual_dev} not found")
             return False
     
+    def reset_virtual_device(self) -> bool:
+        """Reset v4l2loopback device to clear corruption"""
+        try:
+            virtual_device_nr = self.config.get('virtual_device', '/dev/video10').replace('/dev/video', '')
+            label = self.config.get('virtual_device_label', 'VirtualCam')
+            
+            logging.info("Resetting v4l2loopback device to clear corruption...")
+            
+            # Remove module
+            result = subprocess.run(['sudo', 'modprobe', '-r', 'v4l2loopback'], 
+                                  capture_output=True, text=True, timeout=10)
+            if result.returncode != 0:
+                logging.error(f"Failed to remove v4l2loopback module: {result.stderr}")
+                return False
+            
+            # Reload module with parameters
+            cmd = [
+                'sudo', 'modprobe', 'v4l2loopback',
+                f'video_nr={virtual_device_nr}',
+                f'card_label={label}',
+                'exclusive_caps=1'
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                logging.info("v4l2loopback device reset successfully")
+                return True
+            else:
+                logging.error(f"Failed to reload v4l2loopback: {result.stderr}")
+                return False
+                
+        except Exception as e:
+            logging.error(f"Error resetting virtual device: {e}")
+            return False
+    
     def is_streaming(self) -> bool:
         """Check if ffmpeg process is running"""
         if self.ffmpeg_process and self.ffmpeg_process.poll() is None:
@@ -234,7 +269,12 @@ class CameraManager:
         try:
             # Start ffmpeg process (match original bash script approach)
             log_file = self.config.get('logging.file', '/tmp/elgato-virtualcam.log')
-            stderr_file = open(log_file.replace('.log', '.err.log'), 'a')
+            stderr_log = log_file.replace('.log', '.err.log')
+            
+            logging.info(f"Starting FFmpeg with command: {' '.join(cmd)}")
+            logging.info(f"Error log will be at: {stderr_log}")
+            
+            stderr_file = open(stderr_log, 'a')
             
             self.ffmpeg_process = subprocess.Popen(
                 cmd,
@@ -250,8 +290,32 @@ class CameraManager:
                 logging.info(f"Streaming started: {self.elgato_device} → {virtual_dev}")
                 return True
             else:
-                logging.error("FFmpeg process failed to start")
-                return False
+                logging.error("FFmpeg process failed to start - attempting device reset")
+                
+                # Attempt auto-recovery by resetting virtual device
+                if self.reset_virtual_device():
+                    logging.info("Device reset successful, retrying FFmpeg...")
+                    
+                    # Retry FFmpeg with fresh device
+                    stderr_file = open(stderr_log, 'a')
+                    self.ffmpeg_process = subprocess.Popen(
+                        cmd,
+                        stdout=subprocess.DEVNULL,
+                        stderr=stderr_file,
+                        preexec_fn=os.setsid
+                    )
+                    
+                    time.sleep(1)
+                    
+                    if self.ffmpeg_process.poll() is None:
+                        logging.info(f"Streaming started after device reset: {self.elgato_device} → {virtual_dev}")
+                        return True
+                    else:
+                        logging.error("FFmpeg failed again after device reset")
+                        return False
+                else:
+                    logging.error("Device reset failed")
+                    return False
                 
         except Exception as e:
             logging.error(f"Error starting streaming: {e}")
@@ -287,55 +351,85 @@ class SystemTray:
     """System tray interface with status indication"""
     
     def __init__(self, app):
+        print("DEBUG: SystemTray.__init__ starting...")
         self.app = app
         self.config = app.config
         self.camera = app.camera
+        print("DEBUG: SystemTray variables set")
         
         # Create tray icon
+        print("DEBUG: Creating QSystemTrayIcon...")
         self.tray = QSystemTrayIcon()
+        print("DEBUG: QSystemTrayIcon created")
+        
+        print("DEBUG: Connecting activated signal...")
         self.tray.activated.connect(self.on_tray_activated)
+        print("DEBUG: Signal connected")
         
         # Create menu
+        print("DEBUG: Creating menu...")
         self.create_menu()
+        print("DEBUG: Menu created")
         
         # Timer for status updates
+        print("DEBUG: Creating timer...")
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_status)
         self.timer.start(self.config.get('ui.update_interval', 5000))
+        print("DEBUG: Timer started")
         
         # Initial status update
+        print("DEBUG: Updating initial status...")
         self.update_status()
+        print("DEBUG: Status updated")
+        
+        print("DEBUG: Showing tray icon...")
         self.tray.show()
+        print("DEBUG: SystemTray.__init__ complete")
     
     def create_dynamic_icon(self, status: str) -> QIcon:
         """Create status-based tray icon"""
-        pixmap = QPixmap(64, 64)
-        pixmap.fill(Qt.transparent)
-        
-        painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.Antialiasing)
-        
-        # Status-based colors
-        colors = {
-            'on': QColor(76, 175, 80),      # Green
-            'off': QColor(158, 158, 158),   # Gray
-            'error': QColor(244, 67, 54),   # Red
-            'starting': QColor(255, 193, 7) # Amber
-        }
-        
-        color = colors.get(status, colors['off'])
-        painter.setBrush(color)
-        painter.setPen(Qt.NoPen)
-        painter.drawEllipse(8, 8, 48, 48)
-        
-        # Add camera icon text
-        painter.setPen(Qt.white)
-        font = QFont("Arial", 16, QFont.Bold)
-        painter.setFont(font)
-        painter.drawText(pixmap.rect(), Qt.AlignCenter, "📹")
-        
-        painter.end()
-        return QIcon(pixmap)
+        print(f"DEBUG: Creating icon for status: {status}")
+        try:
+            pixmap = QPixmap(64, 64)
+            pixmap.fill(Qt.transparent)
+            print("DEBUG: Pixmap created and filled")
+            
+            painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.Antialiasing)
+            print("DEBUG: QPainter created")
+            
+            # Status-based colors
+            colors = {
+                'on': QColor(76, 175, 80),      # Green
+                'off': QColor(158, 158, 158),   # Gray
+                'error': QColor(244, 67, 54),   # Red
+                'starting': QColor(255, 193, 7) # Amber
+            }
+            
+            color = colors.get(status, colors['off'])
+            painter.setBrush(color)
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(8, 8, 48, 48)
+            print("DEBUG: Circle drawn")
+            
+            # Add camera icon text (simplified)
+            painter.setPen(Qt.white)
+            font = QFont("Arial", 16, QFont.Bold)
+            painter.setFont(font)
+            painter.drawText(pixmap.rect(), Qt.AlignCenter, "C")  # Simple "C" instead of emoji
+            print("DEBUG: Text drawn")
+            
+            painter.end()
+            print("DEBUG: QPainter ended")
+            
+            icon = QIcon(pixmap)
+            print("DEBUG: QIcon created successfully")
+            return icon
+        except Exception as e:
+            print(f"DEBUG: Error in create_dynamic_icon: {e}")
+            # Return a simple default icon
+            return QIcon()
     
     def create_menu(self):
         """Create context menu"""
@@ -436,26 +530,42 @@ class SystemTray:
         QMessageBox.information(None, "Status", "Status dialog coming soon!")
 
 
-class VirtualCamApp(QApplication):
+class VirtualCamApp:
     """Main application class"""
     
     def __init__(self):
-        super().__init__(sys.argv)
-        self.setQuitOnLastWindowClosed(False)
+        print("DEBUG: Initializing VirtualCamApp...")
         
         # Setup logging
+        print("DEBUG: Setting up logging...")
         self.setup_logging()
+        logging.info("DEBUG: Logging setup complete")
         
         # Initialize components
+        print("DEBUG: Creating ConfigManager...")
         self.config = ConfigManager()
+        logging.info("DEBUG: ConfigManager created")
+        
+        print("DEBUG: Creating CameraManager...")
         self.camera = CameraManager(self.config)
-        self.tray = SystemTray(self)
+        logging.info("DEBUG: CameraManager created")
+        
+        # SystemTray will be created later after checking availability
+        self.tray = None
         
         # Handle signals for graceful shutdown
+        print("DEBUG: Setting up signal handlers...")
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
+        logging.info("DEBUG: Signal handlers set up")
         
-        logging.info("Elgato VirtualCam application started")
+        logging.info("Elgato VirtualCam application initialized successfully")
+    
+    def create_system_tray(self):
+        """Create system tray after verifying availability"""
+        print("DEBUG: Creating SystemTray...")
+        self.tray = SystemTray(self)
+        logging.info("DEBUG: SystemTray created")
     
     def setup_logging(self):
         """Configure logging"""
@@ -485,11 +595,11 @@ class VirtualCamApp(QApplication):
             self.camera.stop_streaming()
         
         # Stop timer
-        if hasattr(self.tray, 'timer'):
+        if self.tray and hasattr(self.tray, 'timer'):
             self.tray.timer.stop()
         
         # Quit application
-        super().quit()
+        QApplication.quit()
 
 
 def install_autostart():
@@ -515,15 +625,24 @@ Comment=Elgato Facecam Virtual Camera Controller
 
 def main():
     """Main entry point"""
+    print("DEBUG: main() function started")
     import argparse
+    print("DEBUG: argparse imported")
     
     parser = argparse.ArgumentParser(description='Elgato VirtualCam Desktop Application')
+    print("DEBUG: ArgumentParser created")
     parser.add_argument('--install-autostart', action='store_true',
                         help='Install desktop autostart entry')
     parser.add_argument('--debug', action='store_true',
                         help='Enable debug logging')
     parser.add_argument('--test-camera', action='store_true',
                         help='Test camera detection and exit')
+    parser.add_argument('--start', action='store_true',
+                        help='Start streaming (command-line mode)')
+    parser.add_argument('--stop', action='store_true',
+                        help='Stop streaming (command-line mode)')
+    parser.add_argument('--status', action='store_true',
+                        help='Check streaming status')
     
     args = parser.parse_args()
     
@@ -542,13 +661,68 @@ def main():
             print("❌ Elgato Facecam not detected")
             return 1
     
-    # Check if system tray is available
+    if args.start:
+        config = ConfigManager()
+        camera = CameraManager(config)
+        print("🎥 Starting VirtualCam streaming...")
+        if camera.start_streaming():
+            print("✅ VirtualCam started successfully!")
+            print("📱 Virtual camera available at /dev/video10")
+            print("🛑 Use 'python3 virtualcam_app.py --stop' to stop streaming")
+            return 0
+        else:
+            print("❌ Failed to start VirtualCam")
+            return 1
+    
+    if args.stop:
+        import subprocess
+        try:
+            subprocess.run(['pkill', '-f', 'ffmpeg.*video10'], check=False)
+            print("✅ VirtualCam streaming stopped")
+            return 0
+        except Exception as e:
+            print(f"❌ Error stopping VirtualCam: {e}")
+            return 1
+    
+    if args.status:
+        import subprocess
+        try:
+            result = subprocess.run(['pgrep', '-f', 'ffmpeg.*video10'], 
+                                  capture_output=True, text=True)
+            if result.returncode == 0:
+                print("✅ VirtualCam is streaming")
+                return 0
+            else:
+                print("❌ VirtualCam is not streaming")
+                return 1
+        except Exception as e:
+            print(f"❌ Error checking status: {e}")
+            return 1
+    
+    # Create Qt application first (following Witticism pattern)
+    print("DEBUG: Creating QApplication...")
+    app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
+    print("DEBUG: QApplication created successfully")
+    
+    # Check if system tray is available (after QApplication creation)
+    print("DEBUG: About to check system tray availability...")
     if not QSystemTrayIcon.isSystemTrayAvailable():
         print("❌ System tray is not available on this system")
         return 1
+    print("DEBUG: System tray is available")
     
-    # Create and run application
-    app = VirtualCamApp()
+    # Initialize components
+    print("DEBUG: About to create VirtualCamApp...")
+    virtualcam_app = VirtualCamApp()
+    print("DEBUG: VirtualCamApp created")
+    
+    # Create system tray
+    print("DEBUG: Creating system tray...")
+    virtualcam_app.create_system_tray()
+    print("DEBUG: System tray created")
+    
+    print("DEBUG: About to exec...")
     return app.exec_()
 
 
