@@ -42,7 +42,8 @@ The script will:
 - ⚙️ Professional configuration management
 
 **After installation:**
-- The app will start automatically with proper group permissions
+- Refresh your shell: `exec bash`
+- Start the app in background: `python3 virtualcam_app.py &`
 - Look for the camera icon in your system tray
 - The app will auto-start on future logins
 
@@ -92,8 +93,8 @@ After installation, you'll see a **camera icon** in your system tray that provid
 ### 🔧 Command Line Interface
 
 ```bash
-# Run the application
-python3 virtualcam_app.py
+# Run the application in background
+python3 virtualcam_app.py &
 
 # Test camera detection
 python3 virtualcam_app.py --test-camera
@@ -101,7 +102,7 @@ python3 virtualcam_app.py --test-camera
 # Install autostart
 python3 virtualcam_app.py --install-autostart
 
-# Debug mode
+# Debug mode (foreground for logs)
 python3 virtualcam_app.py --debug
 ```
 
