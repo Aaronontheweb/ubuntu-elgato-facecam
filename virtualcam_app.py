@@ -388,47 +388,46 @@ class SystemTray:
         print("DEBUG: SystemTray.__init__ complete")
     
     def create_dynamic_icon(self, status: str) -> QIcon:
-        """Create status-based tray icon"""
-        print(f"DEBUG: Creating icon for status: {status}")
+        """Create status-based tray icon using proper camera images"""
         try:
-            pixmap = QPixmap(64, 64)
-            pixmap.fill(Qt.transparent)
-            print("DEBUG: Pixmap created and filled")
-            
-            painter = QPainter(pixmap)
-            painter.setRenderHint(QPainter.Antialiasing)
-            print("DEBUG: QPainter created")
-            
-            # Status-based colors
-            colors = {
-                'on': QColor(76, 175, 80),      # Green
-                'off': QColor(158, 158, 158),   # Gray
-                'error': QColor(244, 67, 54),   # Red
-                'starting': QColor(255, 193, 7) # Amber
+            # Map status to icon files
+            icon_map = {
+                'on': 'camera-on.png',
+                'off': 'camera-off-black.png', 
+                'error': 'camera-disconnected.png',
+                'starting': 'camera-unsure.png'
             }
             
-            color = colors.get(status, colors['off'])
-            painter.setBrush(color)
-            painter.setPen(Qt.NoPen)
-            painter.drawEllipse(8, 8, 48, 48)
-            print("DEBUG: Circle drawn")
+            icon_file = icon_map.get(status, 'camera-off-black.png')
+            icon_path = Path(__file__).parent / 'tray-controller' / 'assets' / icon_file
             
-            # Add camera icon text (simplified)
-            painter.setPen(Qt.white)
-            font = QFont("Arial", 16, QFont.Bold)
-            painter.setFont(font)
-            painter.drawText(pixmap.rect(), Qt.AlignCenter, "C")  # Simple "C" instead of emoji
-            print("DEBUG: Text drawn")
-            
-            painter.end()
-            print("DEBUG: QPainter ended")
-            
-            icon = QIcon(pixmap)
-            print("DEBUG: QIcon created successfully")
-            return icon
+            if icon_path.exists():
+                return QIcon(str(icon_path))
+            else:
+                # Fallback to simple colored circle if icon file missing
+                pixmap = QPixmap(64, 64)
+                pixmap.fill(Qt.transparent)
+                
+                painter = QPainter(pixmap)
+                painter.setRenderHint(QPainter.Antialiasing)
+                
+                colors = {
+                    'on': QColor(76, 175, 80),
+                    'off': QColor(158, 158, 158),
+                    'error': QColor(244, 67, 54),
+                    'starting': QColor(255, 193, 7)
+                }
+                
+                color = colors.get(status, colors['off'])
+                painter.setBrush(color)
+                painter.setPen(Qt.NoPen)
+                painter.drawEllipse(16, 16, 32, 32)
+                painter.end()
+                
+                return QIcon(pixmap)
+                
         except Exception as e:
-            print(f"DEBUG: Error in create_dynamic_icon: {e}")
-            # Return a simple default icon
+            logging.error(f"Error creating icon: {e}")
             return QIcon()
     
     def create_menu(self):
@@ -441,16 +440,6 @@ class SystemTray:
         self.menu.addAction(self.toggle_action)
         
         self.menu.addSeparator()
-        
-        # Settings
-        settings_action = QAction("Settings", self.menu)
-        settings_action.triggered.connect(self.show_settings)
-        self.menu.addAction(settings_action)
-        
-        # Status
-        status_action = QAction("Status & Logs", self.menu)
-        status_action.triggered.connect(self.show_status)
-        self.menu.addAction(status_action)
         
         # Refresh
         refresh_action = QAction("Refresh", self.menu)
@@ -519,15 +508,6 @@ class SystemTray:
         if reason == QSystemTrayIcon.Trigger:  # Left click
             self.toggle_streaming()
     
-    def show_settings(self):
-        """Show settings dialog"""
-        # TODO: Implement settings dialog
-        QMessageBox.information(None, "Settings", "Settings dialog coming soon!")
-    
-    def show_status(self):
-        """Show status and logs dialog"""
-        # TODO: Implement status dialog
-        QMessageBox.information(None, "Status", "Status dialog coming soon!")
 
 
 class VirtualCamApp:
