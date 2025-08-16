@@ -21,12 +21,11 @@ A professional desktop application for using the **Elgato Facecam** as a virtual
 
 ## 🚀 Installation
 
-### Quick Start (New Desktop App)
+### Quick Start
 
 ```bash
 git clone https://github.com/Aaronontheweb/ubuntu-elgato-facecam.git
 cd ubuntu-elgato-facecam
-git checkout refactor-to-desktop-app  # Use new architecture
 ./install-desktop-app.sh
 ```
 
@@ -42,12 +41,30 @@ The script will:
 - 🚀 Auto-starts on login via desktop integration
 - ⚙️ Professional configuration management
 
-### Legacy Installation (Systemd - Has Permission Issues)
+**After installation:**
+- The app will start automatically with proper group permissions
+- Look for the camera icon in your system tray
+- The app will auto-start on future logins
 
-⚠️ **Not recommended** - Use for reference only:
+### 🗑️ Uninstalling
+
+To completely remove the desktop application:
 
 ```bash
-git checkout master  # Original systemd approach
+./uninstall-desktop-app.sh
+```
+
+This will:
+- Stop the running application
+- Remove autostart entry
+- Remove configuration (with confirmation)
+- Remove sudoers permissions
+- Optionally remove from video group
+- Optionally remove Python dependencies
+
+### Legacy Files (Systemd - Deprecated)
+
+⚠️ **Not recommended** - The old systemd files remain for reference:
 ./install.sh        # Has known permission issues
 ```
 

@@ -3,6 +3,21 @@ set -e
 
 echo "🚀 Installing Elgato VirtualCam Desktop Application..."
 
+# Check for existing installation
+if [[ -f "$HOME/.config/autostart/elgato-virtualcam.desktop" ]] || pgrep -f "python3 virtualcam_app.py" > /dev/null; then
+    echo "⚠️  Existing installation detected!"
+    read -p "❓ Reinstall? This will stop the current app and update files [y/N]: " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo "🔄 Stopping existing application..."
+        pkill -f "python3 virtualcam_app.py" || echo "   No running application found"
+        echo "✅ Proceeding with reinstall..."
+    else
+        echo "❌ Installation cancelled"
+        exit 0
+    fi
+fi
+
 # Install system dependencies
 echo "📦 Installing system dependencies..."
 sudo apt update
@@ -45,22 +60,21 @@ fi
 # Launch the application in background
 echo "🚀 Starting VirtualCam application..."
 
-# Check if we need to use newgrp for group membership (first time setup)
-if groups | grep -q video; then
-    # User already in video group, start normally
-    python3 virtualcam_app.py &> /dev/null &
-    if [ $? -eq 0 ]; then
-        echo "✅ VirtualCam started successfully in background"
-        echo "📱 Look for the camera icon in your system tray"
-    else
-        echo "⚠️  Failed to start application automatically"
-        echo "💡 You can start it manually with: python3 virtualcam_app.py"
-    fi
+# Use newgrp to refresh group membership and start the app
+echo "🔄 Refreshing group membership and starting application..."
+newgrp video -c 'python3 virtualcam_app.py &> /dev/null &'
+
+# Give it a moment to start
+sleep 2
+
+# Check if it's running
+if pgrep -f "python3 virtualcam_app.py" > /dev/null; then
+    echo "✅ VirtualCam started successfully in background"
+    echo "📱 Look for the camera icon in your system tray"
 else
-    # User needs to refresh group membership
-    echo "ℹ️  Group membership requires refresh for permissions to take effect"
-    echo "💡 Please log out and log back in, then run: python3 virtualcam_app.py"
-    echo "📱 Or start it now with: newgrp video -c 'python3 virtualcam_app.py &'"
+    echo "⚠️  Failed to start application automatically"
+    echo "💡 You can start it manually with: python3 virtualcam_app.py"
+    echo "📝 Or with fresh group membership: newgrp video -c 'python3 virtualcam_app.py &'"
 fi
 
 echo ""
