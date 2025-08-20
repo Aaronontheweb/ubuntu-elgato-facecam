@@ -44,6 +44,9 @@ dev = [
 [project.scripts]
 elgato-virtualcam = "virtualcam_app:main"
 
+[project.gui-scripts]
+elgato-virtualcam-gui = "virtualcam_app:main"
+
 [tool.setuptools]
 py-modules = ["virtualcam_app"]
 

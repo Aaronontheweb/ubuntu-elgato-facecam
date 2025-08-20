@@ -11,6 +11,7 @@ Based on the Witticism project model for robust desktop application architecture
 import json
 import logging
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -591,10 +592,19 @@ def install_autostart():
     autostart_dir = Path.home() / '.config/autostart'
     autostart_dir.mkdir(parents=True, exist_ok=True)
 
+    # Prefer entry point if available, fallback to direct script execution
+    entry_point_cmd = shutil.which('elgato-virtualcam')
+    if entry_point_cmd:
+        exec_cmd = entry_point_cmd
+    else:
+        # Fallback to direct script execution
+        python_exec = shutil.which('python3') or sys.executable
+        exec_cmd = f"{python_exec} {os.path.abspath(__file__)}"
+    
     desktop_entry = f"""[Desktop Entry]
 Type=Application
 Name=Elgato VirtualCam
-Exec=/usr/bin/python3 {os.path.abspath(__file__)}
+Exec={exec_cmd}
 StartupNotify=false
 Terminal=false
 Hidden=false

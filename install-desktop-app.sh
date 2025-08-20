@@ -23,9 +23,9 @@ echo "📦 Installing system dependencies..."
 sudo apt update
 sudo apt install -y v4l2loopback-dkms ffmpeg python3 python3-pip python3-pyqt5
 
-# Install Python dependencies
-echo "🐍 Installing Python dependencies..."
-pip3 install --user -r requirements.txt
+# Install Python package with dependencies
+echo "🐍 Installing Python package..."
+pip3 install --user -e .
 
 # Set up permissions for v4l2loopback management
 echo "🔒 Setting up permissions for virtual camera management..."
@@ -47,11 +47,15 @@ chmod +x virtualcam_app.py
 
 # Install autostart entry
 echo "🔧 Setting up autostart..."
-python3 virtualcam_app.py --install-autostart
+if command -v elgato-virtualcam >/dev/null 2>&1; then
+    elgato-virtualcam --install-autostart
+else
+    python3 virtualcam_app.py --install-autostart
+fi
 
 # Test camera detection
 echo "🎥 Testing camera detection..."
-if python3 virtualcam_app.py --test-camera; then
+if elgato-virtualcam --test-camera 2>/dev/null || python3 virtualcam_app.py --test-camera; then
     echo "✅ Camera detection successful!"
 else
     echo "⚠️  Camera not detected - make sure Elgato Facecam is connected"
@@ -63,7 +67,11 @@ echo "ℹ️  Note: Group membership changes require a fresh shell session"
 echo ""
 echo "💡 Please run these commands to start the app:"
 echo "   exec bash"
-echo "   python3 virtualcam_app.py &"
+if command -v elgato-virtualcam >/dev/null 2>&1; then
+    echo "   elgato-virtualcam &"
+else
+    echo "   python3 virtualcam_app.py &"
+fi
 echo ""
 echo "📱 The camera icon will appear in your system tray when running"
 
@@ -71,15 +79,30 @@ echo ""
 echo "✅ Installation complete!"
 echo ""
 echo "Usage:"
-echo "  # Run the application"
-echo "  python3 virtualcam_app.py"
+if command -v elgato-virtualcam >/dev/null 2>&1; then
+    echo "  # Run the application (entry point)"
+    echo "  elgato-virtualcam"
+    echo ""
+    echo "  # Or run directly"
+    echo "  python3 virtualcam_app.py"
+else
+    echo "  # Run the application"
+    echo "  python3 virtualcam_app.py"
+fi
 echo ""
 echo "  # The application will also start automatically on login"
 echo "  # Look for the camera icon in your system tray"
 echo ""
 echo "Commands:"
 echo "  # Test camera detection"
-echo "  python3 virtualcam_app.py --test-camera"
-echo ""
-echo "  # Install/reinstall autostart"
-echo "  python3 virtualcam_app.py --install-autostart"
+if command -v elgato-virtualcam >/dev/null 2>&1; then
+    echo "  elgato-virtualcam --test-camera"
+    echo ""
+    echo "  # Install/reinstall autostart"
+    echo "  elgato-virtualcam --install-autostart"
+else
+    echo "  python3 virtualcam_app.py --test-camera"
+    echo ""
+    echo "  # Install/reinstall autostart"
+    echo "  python3 virtualcam_app.py --install-autostart"
+fi
