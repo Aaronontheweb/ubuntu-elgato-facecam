@@ -594,11 +594,12 @@ def install_autostart():
     desktop_entry = f"""[Desktop Entry]
 Type=Application
 Name=Elgato VirtualCam
-Exec={sys.executable} {os.path.abspath(__file__)}
+Exec=/usr/bin/python3 {os.path.abspath(__file__)}
 StartupNotify=false
 Terminal=false
 Hidden=false
 X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=10
 Comment=Elgato Facecam Virtual Camera Controller
 """
 
