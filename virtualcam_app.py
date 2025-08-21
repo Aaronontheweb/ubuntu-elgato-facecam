@@ -113,6 +113,7 @@ class ConfigManager:
                 base[key] = value
 
 
+
 class CameraManager:
     """Manages Elgato Facecam detection and ffmpeg streaming"""
 
@@ -444,8 +445,18 @@ class SystemTray:
             return QIcon()
 
     def create_menu(self):
-        """Create context menu"""
+        """Create context menu with inline status like Witticism"""
         self.menu = QMenu()
+
+        # Status header (will be updated dynamically)
+        self.status_header = QAction("Status: Checking...", self.menu)
+        self.status_header.setEnabled(False)  # Non-clickable status display
+        self.menu.addAction(self.status_header)
+        
+        # Status details (will be populated dynamically)
+        self.status_items = []
+        
+        self.menu.addSeparator()
 
         # Toggle action
         self.toggle_action = QAction("Start VirtualCam", self.menu)
@@ -454,20 +465,15 @@ class SystemTray:
 
         self.menu.addSeparator()
 
-        # Refresh
-        refresh_action = QAction("Refresh", self.menu)
+        # Action items
+        refresh_action = QAction("🔄 Refresh", self.menu)
         refresh_action.triggered.connect(self.update_status)
         self.menu.addAction(refresh_action)
 
-        # Diagnostics
-        diagnostics_action = QAction("Run Diagnostics", self.menu)
-        diagnostics_action.triggered.connect(self.run_diagnostics)
-        self.menu.addAction(diagnostics_action)
-
         # Reset virtual device (for recovery)
-        reset_action = QAction("Reset Virtual Device", self.menu)
-        reset_action.triggered.connect(self.reset_virtual_device)
-        self.menu.addAction(reset_action)
+        self.reset_action = QAction("🔧 Reset Virtual Device", self.menu)
+        self.reset_action.triggered.connect(self.reset_virtual_device)
+        self.menu.addAction(self.reset_action)
 
         self.menu.addSeparator()
 
@@ -477,6 +483,68 @@ class SystemTray:
         self.menu.addAction(quit_action)
 
         self.tray.setContextMenu(self.menu)
+
+    def update_menu_status(self, status: str):
+        """Update menu with inline status information like Witticism"""
+        # Clear existing status items
+        for item in self.status_items:
+            self.menu.removeAction(item)
+        self.status_items.clear()
+
+        # Get detailed status info
+        status_info = self.get_detailed_status()
+        
+        # Update header based on overall status
+        if status == 'on':
+            self.status_header.setText("🟢 Status: Streaming Active")
+        elif status == 'off':
+            self.status_header.setText("🟡 Status: Ready to Stream")  
+        else:
+            self.status_header.setText("🔴 Status: Issues Detected")
+
+        # Add status details to menu (insert after header before separator)
+        insert_index = 1  # After status header
+        
+        for info_text in status_info:
+            if info_text:  # Skip empty items
+                status_item = QAction(info_text, self.menu)
+                status_item.setEnabled(False)  # Non-clickable
+                self.menu.insertAction(self.menu.actions()[insert_index], status_item)
+                self.status_items.append(status_item)
+                insert_index += 1
+
+        # Show/hide reset button based on virtual device status
+        virtual_dev = self.config.get('virtual_device', '/dev/video10')
+        self.reset_action.setVisible(not os.path.exists(virtual_dev))
+
+    def get_detailed_status(self) -> list:
+        """Get detailed status information for menu display"""
+        status_lines = []
+        
+        # Check hardware
+        try:
+            result = subprocess.run(['lsusb'], capture_output=True, text=True, timeout=3)
+            if 'Elgato' in result.stdout:
+                status_lines.append("✅ Camera connected")
+            else:
+                status_lines.append("❌ Camera not detected")
+                status_lines.append("💡 Check USB connection")
+        except:
+            status_lines.append("❌ Hardware check failed")
+
+        # Check virtual device
+        virtual_dev = self.config.get('virtual_device', '/dev/video10')
+        if os.path.exists(virtual_dev):
+            status_lines.append("✅ Virtual camera ready")
+        else:
+            status_lines.append("❌ Virtual device missing")
+            status_lines.append("💡 Use 'Reset Virtual Device'")
+
+        # Check streaming
+        if self.camera.is_streaming():
+            status_lines.append("✅ Streaming active")
+        
+        return status_lines
 
     def get_status(self) -> Tuple[str, str]:
         """Get current streaming status with detailed message"""
@@ -506,11 +574,14 @@ class SystemTray:
         # Update tooltip with detailed message
         self.tray.setToolTip(message)
 
-        # Update menu
+        # Update menu status
+        self.update_menu_status(status)
+
+        # Update main toggle action
         if status == 'on':
-            self.toggle_action.setText("Stop VirtualCam")
+            self.toggle_action.setText("⏹️ Stop VirtualCam")
         else:
-            self.toggle_action.setText("Start VirtualCam")
+            self.toggle_action.setText("▶️ Start VirtualCam")
 
         # Log status for debugging (but throttle logging)
         if not hasattr(self, '_last_status') or self._last_status != (status, message):
@@ -543,7 +614,7 @@ class SystemTray:
         """Show system notification"""
         if self.config.get('ui.show_notifications', True) and self.tray.supportsMessages():
             self.tray.showMessage("Elgato VirtualCam", message, QSystemTrayIcon.Information, 3000)
-
+    
     def run_diagnostics(self):
         """Run system diagnostics and show results"""
         diagnostics = []
