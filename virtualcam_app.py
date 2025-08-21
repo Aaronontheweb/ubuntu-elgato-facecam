@@ -24,8 +24,14 @@ from PyQt5.QtGui import QColor, QIcon, QPainter, QPixmap
 from PyQt5.QtWidgets import (
     QAction,
     QApplication,
+    QDialog,
+    QLabel,
     QMenu,
+    QPushButton,
+    QScrollArea,
     QSystemTrayIcon,
+    QVBoxLayout,
+    QWidget,
 )
 
 
@@ -111,6 +117,238 @@ class ConfigManager:
                 self._deep_merge(base[key], value)
             else:
                 base[key] = value
+
+
+class StatusDialog(QDialog):
+    """Rich status dialog showing system information and troubleshooting tips"""
+    
+    def __init__(self, config: ConfigManager, camera: 'CameraManager', parent=None):
+        super().__init__(parent)
+        self.config = config
+        self.camera = camera
+        self.setWindowTitle("VirtualCam Status")
+        self.setFixedSize(450, 600)
+        self.setModal(False)  # Allow interaction with main app
+        
+        # Main layout
+        layout = QVBoxLayout(self)
+        
+        # Header
+        header = QLabel("🎥 Elgato VirtualCam Status")
+        header.setStyleSheet("font-size: 16px; font-weight: bold; padding: 10px; background-color: #2d3142; color: white;")
+        header.setAlignment(Qt.AlignCenter)
+        layout.addWidget(header)
+        
+        # Scrollable content area
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarNever)
+        
+        # Content widget
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setSpacing(15)
+        
+        # Status sections
+        self.status_label = QLabel()
+        self.status_label.setWordWrap(True)
+        content_layout.addWidget(self.status_label)
+        
+        scroll.setWidget(content)
+        layout.addWidget(scroll)
+        
+        # Button layout
+        button_layout = QVBoxLayout()
+        
+        # Refresh button
+        refresh_btn = QPushButton("🔄 Refresh Status")
+        refresh_btn.clicked.connect(self.refresh_status)
+        button_layout.addWidget(refresh_btn)
+        
+        # Action buttons
+        self.action_buttons = []
+        button_layout.addWidget(QLabel())  # Spacer
+        
+        layout.addLayout(button_layout)
+        self.button_layout = button_layout
+        
+        # Initial refresh
+        self.refresh_status()
+    
+    def create_section(self, title: str, items: list, status_color: str = "#666666") -> str:
+        """Create a formatted section for the status display"""
+        section = f'<div style="margin-bottom: 15px; padding: 10px; border-left: 4px solid {status_color}; background-color: #f8f9fa;">'
+        section += f'<h3 style="margin: 0 0 8px 0; color: {status_color};">{title}</h3>'
+        
+        for item in items:
+            if item.startswith('✅'):
+                section += f'<div style="color: #28a745; margin: 4px 0;">✅ {item[2:].strip()}</div>'
+            elif item.startswith('❌'):
+                section += f'<div style="color: #dc3545; margin: 4px 0;">❌ {item[2:].strip()}</div>'
+            elif item.startswith('⚠️'):
+                section += f'<div style="color: #ffc107; margin: 4px 0;">⚠️ {item[2:].strip()}</div>'
+            else:
+                section += f'<div style="color: #333; margin: 4px 0;">• {item}</div>'
+        
+        section += '</div>'
+        return section
+    
+    def get_system_diagnostics(self):
+        """Get comprehensive system diagnostics"""
+        diagnostics = {
+            'hardware': [],
+            'virtual_device': [],
+            'streaming': [],
+            'suggestions': []
+        }
+        
+        # Hardware checks
+        try:
+            result = subprocess.run(['lsusb'], capture_output=True, text=True, timeout=5)
+            if 'Elgato' in result.stdout:
+                # Parse for Elgato devices
+                for line in result.stdout.split('\n'):
+                    if 'Elgato' in line:
+                        diagnostics['hardware'].append(f"✅ Found: {line.split('ID ')[1] if 'ID ' in line else 'Elgato device'}")
+            else:
+                diagnostics['hardware'].append("❌ No Elgato devices found in USB")
+                diagnostics['suggestions'].append("🔌 Check USB connection - try unplugging and reconnecting the camera")
+                diagnostics['suggestions'].append("🔄 Try a different USB port (preferably USB 3.0)")
+                diagnostics['suggestions'].append("💡 Ensure the camera is powered on")
+        except Exception as e:
+            diagnostics['hardware'].append(f"❌ Error checking USB devices: {e}")
+        
+        # Virtual device checks
+        virtual_dev = self.config.get('virtual_device', '/dev/video10')
+        if os.path.exists(virtual_dev):
+            diagnostics['virtual_device'].append(f"✅ Virtual device exists: {virtual_dev}")
+        else:
+            diagnostics['virtual_device'].append(f"❌ Virtual device not found: {virtual_dev}")
+            diagnostics['suggestions'].append("🔧 Click 'Reset Virtual Device' below to reload kernel module")
+        
+        # v4l2loopback module check
+        try:
+            result = subprocess.run(['lsmod'], capture_output=True, text=True, timeout=5)
+            if 'v4l2loopback' in result.stdout:
+                diagnostics['virtual_device'].append("✅ v4l2loopback kernel module loaded")
+            else:
+                diagnostics['virtual_device'].append("❌ v4l2loopback kernel module not loaded")
+                diagnostics['suggestions'].append("🔧 Install v4l2loopback: sudo apt install v4l2loopback-dkms")
+        except Exception as e:
+            diagnostics['virtual_device'].append(f"❌ Error checking kernel modules: {e}")
+        
+        # Camera detection
+        camera_device = self.camera.detect_elgato_camera()
+        if camera_device:
+            diagnostics['hardware'].append(f"✅ Camera detected at {camera_device}")
+        else:
+            diagnostics['hardware'].append("❌ Elgato Facecam not detected by v4l2")
+            if not diagnostics['suggestions']:  # Only add if no USB suggestions
+                diagnostics['suggestions'].append("🔍 Camera may be in use by another application")
+                diagnostics['suggestions'].append("📱 Try closing other video apps (Zoom, OBS, etc.)")
+        
+        # Streaming status
+        if self.camera.is_streaming():
+            diagnostics['streaming'].append("✅ FFmpeg streaming process active")
+            diagnostics['streaming'].append(f"✅ Streaming to {virtual_dev}")
+        else:
+            diagnostics['streaming'].append("❌ No active streaming")
+            if camera_device and os.path.exists(virtual_dev):
+                diagnostics['suggestions'].append("▶️ Ready to start streaming - click the tray icon")
+        
+        return diagnostics
+    
+    def refresh_status(self):
+        """Refresh the status display"""
+        diagnostics = self.get_system_diagnostics()
+        
+        # Build HTML content
+        html_content = '<div style="font-family: Arial, sans-serif; font-size: 13px;">'
+        
+        # Overall status
+        if diagnostics['hardware'] and any('✅' in item for item in diagnostics['hardware']):
+            if self.camera.is_streaming():
+                overall_status = "🟢 Streaming Active"
+                status_color = "#28a745"
+            elif any('✅ Camera detected' in item for item in diagnostics['hardware']):
+                overall_status = "🟡 Ready to Stream"
+                status_color = "#ffc107"
+            else:
+                overall_status = "🔴 Camera Issues"
+                status_color = "#dc3545"
+        else:
+            overall_status = "🔴 Hardware Not Detected"
+            status_color = "#dc3545"
+        
+        html_content += self.create_section(f"Status: {overall_status}", [], status_color)
+        
+        # Hardware section
+        if diagnostics['hardware']:
+            html_content += self.create_section("Hardware", diagnostics['hardware'], "#007bff")
+        
+        # Virtual device section
+        if diagnostics['virtual_device']:
+            html_content += self.create_section("Virtual Camera", diagnostics['virtual_device'], "#6610f2")
+        
+        # Streaming section
+        if diagnostics['streaming']:
+            html_content += self.create_section("Streaming", diagnostics['streaming'], "#20c997")
+        
+        # Suggestions section
+        if diagnostics['suggestions']:
+            html_content += self.create_section("💡 Suggestions", diagnostics['suggestions'], "#fd7e14")
+        
+        html_content += '</div>'
+        
+        self.status_label.setText(html_content)
+        
+        # Update action buttons
+        self.update_action_buttons(diagnostics)
+    
+    def update_action_buttons(self, diagnostics):
+        """Update action buttons based on current status"""
+        # Clear existing action buttons
+        for btn in self.action_buttons:
+            btn.setParent(None)
+        self.action_buttons.clear()
+        
+        # Add relevant action buttons
+        if not any('✅ Virtual device exists' in item for item in diagnostics['virtual_device']):
+            btn = QPushButton("🔧 Reset Virtual Device")
+            btn.clicked.connect(self.reset_virtual_device)
+            btn.setStyleSheet("background-color: #007bff; color: white; padding: 8px; border: none; border-radius: 4px;")
+            self.button_layout.insertWidget(-1, btn)
+            self.action_buttons.append(btn)
+        
+        if self.camera.is_streaming():
+            btn = QPushButton("⏹️ Stop Streaming")
+            btn.clicked.connect(self.stop_streaming)
+            btn.setStyleSheet("background-color: #dc3545; color: white; padding: 8px; border: none; border-radius: 4px;")
+            self.button_layout.insertWidget(-1, btn)
+            self.action_buttons.append(btn)
+        elif any('✅' in item for item in diagnostics['hardware']) and any('✅ Virtual device exists' in item for item in diagnostics['virtual_device']):
+            btn = QPushButton("▶️ Start Streaming")
+            btn.clicked.connect(self.start_streaming)
+            btn.setStyleSheet("background-color: #28a745; color: white; padding: 8px; border: none; border-radius: 4px;")
+            self.button_layout.insertWidget(-1, btn)
+            self.action_buttons.append(btn)
+    
+    def reset_virtual_device(self):
+        """Reset virtual device"""
+        success = self.camera.reset_virtual_device()
+        if success:
+            self.refresh_status()
+        
+    def start_streaming(self):
+        """Start streaming"""
+        success = self.camera.start_streaming()
+        self.refresh_status()
+        
+    def stop_streaming(self):
+        """Stop streaming"""
+        success = self.camera.stop_streaming()
+        self.refresh_status()
 
 
 class CameraManager:
@@ -390,6 +628,9 @@ class SystemTray:
         # Track previous status for automatic recovery
         self._consecutive_errors = 0
         self._max_consecutive_errors = 3
+        
+        # Status dialog
+        self.status_dialog = None
 
         # Initial status update
         print("DEBUG: Updating initial status...")
@@ -459,8 +700,13 @@ class SystemTray:
         refresh_action.triggered.connect(self.update_status)
         self.menu.addAction(refresh_action)
 
-        # Diagnostics
-        diagnostics_action = QAction("Run Diagnostics", self.menu)
+        # Show Status (rich interface)
+        status_action = QAction("📊 Show Status", self.menu)
+        status_action.triggered.connect(self.show_status_dialog)
+        self.menu.addAction(status_action)
+        
+        # Diagnostics (simple logging)
+        diagnostics_action = QAction("🔍 Run Diagnostics", self.menu)
         diagnostics_action.triggered.connect(self.run_diagnostics)
         self.menu.addAction(diagnostics_action)
 
@@ -543,6 +789,17 @@ class SystemTray:
         """Show system notification"""
         if self.config.get('ui.show_notifications', True) and self.tray.supportsMessages():
             self.tray.showMessage("Elgato VirtualCam", message, QSystemTrayIcon.Information, 3000)
+    
+    def show_status_dialog(self):
+        """Show rich status dialog"""
+        if self.status_dialog is None:
+            self.status_dialog = StatusDialog(self.config, self.camera)
+        
+        # Refresh and show
+        self.status_dialog.refresh_status()
+        self.status_dialog.show()
+        self.status_dialog.raise_()
+        self.status_dialog.activateWindow()
 
     def run_diagnostics(self):
         """Run system diagnostics and show results"""
