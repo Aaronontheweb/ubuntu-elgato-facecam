@@ -386,7 +386,7 @@ class SystemTray:
         self.timer.timeout.connect(self.update_status)
         self.timer.start(self.config.get('ui.update_interval', 5000))
         print("DEBUG: Timer started")
-        
+
         # Track previous status for automatic recovery
         self._consecutive_errors = 0
         self._max_consecutive_errors = 3
@@ -458,12 +458,12 @@ class SystemTray:
         refresh_action = QAction("Refresh", self.menu)
         refresh_action.triggered.connect(self.update_status)
         self.menu.addAction(refresh_action)
-        
+
         # Diagnostics
         diagnostics_action = QAction("Run Diagnostics", self.menu)
         diagnostics_action.triggered.connect(self.run_diagnostics)
         self.menu.addAction(diagnostics_action)
-        
+
         # Reset virtual device (for recovery)
         reset_action = QAction("Reset Virtual Device", self.menu)
         reset_action.triggered.connect(self.reset_virtual_device)
@@ -478,17 +478,17 @@ class SystemTray:
 
         self.tray.setContextMenu(self.menu)
 
-    def get_status(self) -> tuple[str, str]:
+    def get_status(self) -> Tuple[str, str]:
         """Get current streaming status with detailed message"""
         # Check if streaming first (fastest check)
         if self.camera.is_streaming():
             return 'on', 'VirtualCam is streaming'
-        
+
         # Check virtual device availability
         virtual_dev = self.config.get('virtual_device', '/dev/video10')
         if not os.path.exists(virtual_dev):
             return 'error', f'Virtual device {virtual_dev} not found (v4l2loopback not loaded?)'
-        
+
         # Check camera availability (only if not streaming to avoid interference)
         camera_device = self.camera.elgato_device or self.camera.detect_elgato_camera()
         if camera_device:
@@ -511,12 +511,12 @@ class SystemTray:
             self.toggle_action.setText("Stop VirtualCam")
         else:
             self.toggle_action.setText("Start VirtualCam")
-            
+
         # Log status for debugging (but throttle logging)
         if not hasattr(self, '_last_status') or self._last_status != (status, message):
             logging.info(f"Status: {status} - {message}")
             self._last_status = (status, message)
-            
+
         # Automatic recovery logic
         if status == 'error':
             self._consecutive_errors += 1
@@ -547,7 +547,7 @@ class SystemTray:
     def run_diagnostics(self):
         """Run system diagnostics and show results"""
         diagnostics = []
-        
+
         # Check v4l2loopback module
         try:
             result = subprocess.run(['lsmod'], capture_output=True, text=True, timeout=5)
@@ -557,51 +557,51 @@ class SystemTray:
                 diagnostics.append("❌ v4l2loopback module not loaded")
         except Exception as e:
             diagnostics.append(f"❌ Error checking kernel modules: {e}")
-        
+
         # Check virtual device
         virtual_dev = self.config.get('virtual_device', '/dev/video10')
         if os.path.exists(virtual_dev):
             diagnostics.append(f"✅ Virtual device {virtual_dev} exists")
         else:
             diagnostics.append(f"❌ Virtual device {virtual_dev} not found")
-        
+
         # Check camera detection
         camera_device = self.camera.detect_elgato_camera()
         if camera_device:
             diagnostics.append(f"✅ Elgato Facecam detected at {camera_device}")
         else:
             diagnostics.append("❌ Elgato Facecam not detected")
-        
+
         # Check FFmpeg process
         if self.camera.is_streaming():
             diagnostics.append("✅ FFmpeg streaming process running")
         else:
             diagnostics.append("❌ FFmpeg streaming not active")
-        
+
         # Show notification with results
         message = "Diagnostics:\n" + "\n".join(diagnostics)
         logging.info(f"Diagnostics results:\n{message}")
-        self.show_notification(f"Diagnostics complete - check logs for details")
-    
+        self.show_notification("Diagnostics complete - check logs for details")
+
     def reset_virtual_device(self):
         """Reset virtual device for recovery"""
         logging.info("User requested virtual device reset")
         if self.camera.is_streaming():
             self.camera.stop_streaming()
-        
+
         success = self.camera.reset_virtual_device()
         message = "Virtual device reset successfully" if success else "Failed to reset virtual device"
         self.show_notification(message)
         self.update_status()
-    
+
     def attempt_recovery(self):
         """Attempt automatic system recovery"""
         logging.info("Attempting automatic recovery...")
-        
+
         # Stop any existing processes
         if self.camera.is_streaming():
             self.camera.stop_streaming()
-        
+
         # Try to reset virtual device
         if self.camera.reset_virtual_device():
             logging.info("Virtual device reset successful during recovery")
@@ -702,7 +702,7 @@ def install_autostart():
         # Fallback to direct script execution
         python_exec = shutil.which('python3') or sys.executable
         exec_cmd = f"{python_exec} {os.path.abspath(__file__)}"
-    
+
     desktop_entry = f"""[Desktop Entry]
 Type=Application
 Name=Elgato VirtualCam
