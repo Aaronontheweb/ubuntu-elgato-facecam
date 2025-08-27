@@ -121,6 +121,8 @@ class CameraManager:
         self.config = config
         self.ffmpeg_process: Optional[subprocess.Popen] = None
         self.elgato_device: Optional[str] = None
+        self.stderr_file = None  # Track stderr file handle
+        self.stream_start_time: Optional[float] = None  # Track when streaming started
 
     def detect_elgato_camera(self) -> Optional[str]:
         """Auto-detect Elgato Facecam device"""
@@ -260,17 +262,20 @@ class CameraManager:
             logging.error("Cannot start streaming: virtual device not available")
             return False
 
-        # Build ffmpeg command
+        # Build ffmpeg command with robust flags to prevent corruption
         params = self.config.get('ffmpeg_params', {})
         virtual_dev = self.config.get('virtual_device', '/dev/video10')
 
         cmd = [
             'ffmpeg',
             '-f', 'v4l2',
+            '-use_wallclock_as_timestamps', '1',  # Prevent timestamp drift
+            '-thread_queue_size', '512',           # Larger buffer to prevent drops
             '-framerate', str(params.get('framerate', 30)),
             '-input_format', params.get('input_format', 'uyvy422'),
             '-video_size', params.get('video_size', '1280x720'),
             '-i', self.elgato_device,
+            '-fflags', '+genpts',                  # Regenerate timestamps
             '-f', 'v4l2',
             '-pix_fmt', params.get('output_format', 'yuv420p'),
             virtual_dev
@@ -284,12 +289,16 @@ class CameraManager:
             logging.info(f"Starting FFmpeg with command: {' '.join(cmd)}")
             logging.info(f"Error log will be at: {stderr_log}")
 
-            stderr_file = open(stderr_log, 'a')
+            # Close any existing stderr file handle
+            if self.stderr_file:
+                self.stderr_file.close()
+                
+            self.stderr_file = open(stderr_log, 'a')
 
             self.ffmpeg_process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.DEVNULL,
-                stderr=stderr_file,
+                stderr=self.stderr_file,
                 preexec_fn=os.setsid  # Create new process group
             )
 
@@ -297,6 +306,7 @@ class CameraManager:
             time.sleep(1)
 
             if self.ffmpeg_process.poll() is None:
+                self.stream_start_time = time.time()  # Track when stream started
                 logging.info(f"Streaming started: {self.elgato_device} → {virtual_dev}")
                 return True
             else:
@@ -306,18 +316,22 @@ class CameraManager:
                 if self.reset_virtual_device():
                     logging.info("Device reset successful, retrying FFmpeg...")
 
-                    # Retry FFmpeg with fresh device
-                    stderr_file = open(stderr_log, 'a')
+                    # Close and reopen stderr file for retry
+                    if self.stderr_file:
+                        self.stderr_file.close()
+                    
+                    self.stderr_file = open(stderr_log, 'a')
                     self.ffmpeg_process = subprocess.Popen(
                         cmd,
                         stdout=subprocess.DEVNULL,
-                        stderr=stderr_file,
+                        stderr=self.stderr_file,
                         preexec_fn=os.setsid
                     )
 
                     time.sleep(1)
 
                     if self.ffmpeg_process.poll() is None:
+                        self.stream_start_time = time.time()
                         logging.info(f"Streaming started after device reset: {self.elgato_device} → {virtual_dev}")
                         return True
                     else:
@@ -349,12 +363,60 @@ class CameraManager:
                 self.ffmpeg_process.wait()
 
             self.ffmpeg_process = None
+            self.stream_start_time = None
+            
+            # Close stderr file to prevent file descriptor leak
+            if self.stderr_file:
+                self.stderr_file.close()
+                self.stderr_file = None
+                
             logging.info("Streaming stopped")
             return True
 
         except Exception as e:
             logging.error(f"Error stopping streaming: {e}")
             return False
+    
+    def check_stream_health(self) -> bool:
+        """Check if stream needs preventive restart to avoid corruption"""
+        if not self.is_streaming() or not self.stream_start_time:
+            return True  # Not streaming, health is fine
+        
+        # Check runtime - restart after 3 hours to prevent corruption
+        MAX_RUNTIME_HOURS = 3
+        runtime_hours = (time.time() - self.stream_start_time) / 3600
+        
+        if runtime_hours > MAX_RUNTIME_HOURS:
+            logging.info(f"Stream running for {runtime_hours:.1f} hours, needs preventive restart")
+            return False  # Needs restart
+            
+        return True  # Stream is healthy
+    
+    def perform_preventive_restart(self) -> bool:
+        """Perform a preventive restart of streaming to avoid corruption"""
+        logging.info("Performing preventive stream restart to maintain stability")
+        
+        # Stop current stream
+        if not self.stop_streaming():
+            logging.error("Failed to stop stream for preventive restart")
+            return False
+            
+        # Brief pause to clear buffers
+        time.sleep(2)
+        
+        # Restart streaming
+        if self.start_streaming():
+            logging.info("Preventive restart completed successfully")
+            return True
+        else:
+            logging.error("Failed to restart stream after preventive stop")
+            return False
+    
+    def get_runtime_minutes(self) -> int:
+        """Get current stream runtime in minutes"""
+        if self.stream_start_time and self.is_streaming():
+            return int((time.time() - self.stream_start_time) / 60)
+        return 0
 
 
 class SystemTray:
@@ -387,6 +449,12 @@ class SystemTray:
         self.timer.timeout.connect(self.update_status)
         self.timer.start(self.config.get('ui.update_interval', 5000))
         print("DEBUG: Timer started")
+        
+        # Timer for health checks (every 30 seconds when streaming)
+        self.health_timer = QTimer()
+        self.health_timer.timeout.connect(self.check_stream_health)
+        self.health_timer.start(30000)  # Check every 30 seconds
+        logging.info("Health monitoring enabled (30 second intervals)")
 
         # Track previous status for automatic recovery
         self._consecutive_errors = 0
@@ -550,6 +618,9 @@ class SystemTray:
         """Get current streaming status with detailed message"""
         # Check if streaming first (fastest check)
         if self.camera.is_streaming():
+            runtime_min = self.camera.get_runtime_minutes()
+            if runtime_min > 0:
+                return 'on', f'VirtualCam streaming ({runtime_min} min)'
             return 'on', 'VirtualCam is streaming'
 
         # Check virtual device availability
@@ -609,6 +680,25 @@ class SystemTray:
 
         self.show_notification(message)
         self.update_status()
+    
+    def check_stream_health(self):
+        """Check stream health and perform preventive restart if needed"""
+        if not self.camera.is_streaming():
+            return  # Nothing to check
+        
+        if not self.camera.check_stream_health():
+            # Stream needs preventive restart
+            logging.info("Stream health check triggered preventive restart")
+            self.show_notification("Performing preventive stream restart (3+ hour runtime)")
+            
+            if self.camera.perform_preventive_restart():
+                self.show_notification("Stream restarted successfully")
+                logging.info("Preventive restart completed")
+            else:
+                self.show_notification("Failed to restart stream - please restart manually")
+                logging.error("Preventive restart failed")
+            
+            self.update_status()
 
     def show_notification(self, message: str):
         """Show system notification"""

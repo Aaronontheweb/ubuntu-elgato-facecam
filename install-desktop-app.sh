@@ -42,6 +42,13 @@ EOF
 
 echo "✅ Permissions configured - virtual camera can auto-recover from device corruption"
 
+# Setup USB power management to prevent device corruption
+echo "🔌 Setting up USB power management..."
+UDEV_RULE="/etc/udev/rules.d/99-elgato-nosuspend.rules"
+echo 'ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="0fd9", ATTR{idProduct}=="0078", ATTR{power/autosuspend}="-1"' | sudo tee "$UDEV_RULE" > /dev/null
+sudo udevadm control --reload-rules
+echo "   ✅ USB autosuspend disabled for Elgato Facecam (prevents corruption)"
+
 # Make application executable
 chmod +x virtualcam_app.py
 
