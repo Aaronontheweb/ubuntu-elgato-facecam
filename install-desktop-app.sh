@@ -21,11 +21,28 @@ fi
 # Install system dependencies
 echo "📦 Installing system dependencies..."
 sudo apt update
-sudo apt install -y v4l2loopback-dkms ffmpeg python3 python3-pip python3-pyqt5
+sudo apt install -y v4l2loopback-dkms ffmpeg python3 python3-pyqt5 v4l-utils
 
-# Install Python package with dependencies
-echo "🐍 Installing Python package..."
-pip3 install --user -e .
+
+# Install command-line entry point
+# Note: We skip pip install since PyQt5 is installed via apt (python3-pyqt5).
+# Instead, create a wrapper script for the 'elgato-virtualcam' command.
+echo "🐍 Installing command-line entry point..."
+INSTALL_DIR="$HOME/.local/bin"
+mkdir -p "$INSTALL_DIR"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cat > "$INSTALL_DIR/elgato-virtualcam" <<WRAPPER
+#!/bin/bash
+exec python3 "$SCRIPT_DIR/virtualcam_app.py" "\$@"
+WRAPPER
+chmod +x "$INSTALL_DIR/elgato-virtualcam"
+
+# Ensure ~/.local/bin is on PATH
+if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+    echo "⚠️  $INSTALL_DIR is not on your PATH."
+    echo "   Add this to your ~/.bashrc or ~/.profile:"
+    echo "     export PATH=\"\$HOME/.local/bin:\$PATH\""
+fi
 
 # Set up permissions for v4l2loopback management
 echo "🔒 Setting up permissions for virtual camera management..."
